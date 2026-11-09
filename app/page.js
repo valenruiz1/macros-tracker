@@ -6,6 +6,74 @@ const COMIDAS = ["desayuno", "almuerzo", "merienda", "cena"];
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 const r0 = (n) => Math.round(n || 0);
 
+const lunes = (d) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+};
+const INICIALES = ["L", "M", "M", "J", "V", "S", "D"];
+
+function Semana({ dia, datos }) {
+  const ini = lunes(dia);
+  const hoy = iso(new Date());
+  const dias = INICIALES.map((l, i) => {
+    const d = new Date(ini);
+    d.setDate(ini.getDate() + i);
+    const f = iso(d);
+    return { f, l, ...(datos[f] || { kcal: 0, prote: 0, carbos: 0, grasas: 0, pasos: 0 }) };
+  });
+  const tot = dias.reduce(
+    (a, d) => ({ kcal: a.kcal + d.kcal, prote: a.prote + d.prote, carbos: a.carbos + d.carbos, grasas: a.grasas + d.grasas, pasos: a.pasos + d.pasos }),
+    { kcal: 0, prote: 0, carbos: 0, grasas: 0, pasos: 0 }
+  );
+  const conDatos = dias.filter((d) => d.kcal > 0).length || 1;
+  const metaSem = META.kcal * 7;
+  const max = Math.max(META.kcal * 1.3, ...dias.map((d) => d.kcal));
+  const fin = new Date(ini);
+  fin.setDate(ini.getDate() + 6);
+  const rango = ini.toLocaleDateString("es-AR", { day: "numeric", month: "short" }) + " – " + fin.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
+
+  return (
+    <div className="card">
+      <div className="row">
+        <h3 style={{ margin: 0 }}>Semana</h3>
+        <span className="mu">{rango}</span>
+      </div>
+      <div className="big" style={{ marginTop: 6 }}>
+        {r0(tot.kcal).toLocaleString("es-AR")} <span className="mu">/ {metaSem.toLocaleString("es-AR")} kcal</span>
+      </div>
+      <Barra valor={tot.kcal} meta={metaSem} color="#d9822b" />
+
+      <div style={{ position: "relative", height: 110, display: "flex", alignItems: "flex-end", gap: 6 }}>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: (META.kcal / max) * 100 + "%", borderTop: "1px dashed var(--mu)" }} />
+        {dias.map((d) => (
+          <div key={d.f} style={{ flex: 1, height: (d.kcal / max) * 100 + "%", minHeight: d.kcal ? 3 : 0, background: d.kcal > META.kcal ? "#d9822b" : "var(--ac)", borderRadius: "5px 5px 0 0", opacity: d.f === hoy ? 1 : 0.8 }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+        {dias.map((d) => (
+          <div key={d.f} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: d.f === hoy ? 700 : 400 }}>
+            {d.l}
+            <div className="mu" style={{ fontSize: 11 }}>{d.kcal ? r0(d.kcal) : "–"}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mu" style={{ marginTop: 6 }}>Línea punteada: tu meta diaria de {META.kcal} kcal.</div>
+
+      <div className="mac" style={{ marginTop: 12 }}>
+        <div><span className="mu">Prom. proteína</span><b style={{ display: "block" }}>{r0(tot.prote / conDatos)} g</b></div>
+        <div><span className="mu">Prom. carbos</span><b style={{ display: "block" }}>{r0(tot.carbos / conDatos)} g</b></div>
+        <div><span className="mu">Prom. grasas</span><b style={{ display: "block" }}>{r0(tot.grasas / conDatos)} g</b></div>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <span className="mu">Pasos de la semana</span>
+        <b>{tot.pasos.toLocaleString("es-AR")} / {(META.pasos * 7).toLocaleString("es-AR")}</b>
+      </div>
+      <Barra valor={tot.pasos} meta={META.pasos * 7} color="#7a5bc4" />
+    </div>
+  );
+}
+
 function Barra({ valor, meta, color }) {
   return (
     <div className="bar">
@@ -19,6 +87,7 @@ export default function Home() {
   const [dia, setDia] = useState(new Date());
   const [items, setItems] = useState([]);
   const [pasos, setPasos] = useState(0);
+  const [semana, setSemana] = useState({});
   const [texto, setTexto] = useState("");
   const [pasosIn, setPasosIn] = useState("");
   const [msg, setMsg] = useState("");
@@ -48,6 +117,10 @@ export default function Home() {
     try {
       setItems(await api("/api/comidas?fecha=" + fecha));
       setPasos((await api("/api/pasos?fecha=" + fecha)).pasos);
+      const ini = lunes(new Date(fecha + "T12:00:00"));
+      const fin = new Date(ini);
+      fin.setDate(ini.getDate() + 6);
+      setSemana(await api("/api/semana?desde=" + iso(ini) + "&hasta=" + iso(fin)));
     } catch (e) {
       setMsg(e.message);
     }
@@ -174,6 +247,8 @@ export default function Home() {
           <button onClick={guardarPasos}>Guardar</button>
         </div>
       </div>
+
+      <Semana dia={dia} datos={semana} />
 
       {COMIDAS.map((c) => {
         const its = items.filter((i) => i.comida === c);
