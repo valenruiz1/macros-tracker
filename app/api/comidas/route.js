@@ -18,16 +18,23 @@ export async function POST(req) {
   const { fecha, texto, hora } = await req.json();
 
   const prompt =
-    "Sos un nutricionista. Convertí lo que comió la persona en JSON con esta forma exacta: " +
+    "Sos un nutricionista experto. Convertí lo que comió la persona en JSON con esta forma exacta: " +
     '{"comida":"desayuno|almuerzo|merienda|cena|null","items":[{"nombre":"","gramos":0,"kcal":0,"prote":0,"carbos":0,"grasas":0}]}. ' +
-    "Reglas: un item por alimento; prote, carbos y grasas en gramos; usá valores nutricionales estándar " +
-    "(si dice cocido, valores de cocido); si no da gramos, estimá una porción razonable; " +
-    "si la persona dice a qué comida corresponde, ponelo en comida, si no, null.";
+    "Reglas: " +
+    "1) Un item por alimento. " +
+    "2) Usá valores por 100 g de la base USDA / tablas oficiales, y escalalos a los gramos del item. " +
+    "3) Respetá el estado que dice la persona (cocido, crudo, con piel, sin piel); si no lo dice, asumí lo más común. " +
+    "4) Si da unidades en vez de gramos, convertí con estos pesos comestibles: huevo grande = 50 g, banana mediana = 118 g, " +
+    "manzana mediana = 182 g, rebanada de pan de molde = 28 g. Poné en gramos el peso que asumiste. " +
+    "5) Si no da cantidad, estimá una porción habitual y poné los gramos asumidos. " +
+    "6) Los números tienen que ser coherentes: kcal ≈ 4 x prote + 4 x carbos + 9 x grasas. " +
+    "7) Si la persona dice a qué comida corresponde, ponelo en comida; si no, null.";
 
   let res;
   try {
     const r = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
+      temperature: 0,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: prompt },
